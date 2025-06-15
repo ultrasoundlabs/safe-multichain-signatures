@@ -2,6 +2,17 @@
 
 This is a module for the Safe smart account that allows for multi-chain signatures.
 
+### How to deploy
+
+```bash
+forge script script/SiglessTransactionExecutor.s.sol:SiglessTransactionExecutorScript --rpc-url $RPC_URL --broadcast --verify -vvvv
+forge script script/MultiChainSignaturesModule.s.sol:MultiChainSignaturesModuleScript --rpc-url $RPC_URL --broadcast --verify -vvvv
+```
+
+The scripts use [CREATEX](https://github.com/pcaversaccio/createx) (specifically [radeksvarz's createx-forge library](https://github.com/radeksvarz/createx-forge)) to deploy the contracts on any chain deterministically. Deploying v0.0 release of these contracts, you should get the following addresses:
+- SiglessTransactionExecutor: `0xFE8E3275aDeb5bB326ded58d1336aDb2b7A68f4b`
+- MultiChainSignaturesModule: `0xc254C43E27FB03791663C109A4DFD0EB99242Ee9`
+
 ## How it works
 
 ### Contracts
