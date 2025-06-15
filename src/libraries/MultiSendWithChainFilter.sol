@@ -69,13 +69,9 @@ contract MultiSendWithChainFilter {
                 let data := add(transactions, add(i, 0x75))
                 let success := 0
                 switch operation
-                case 0 {
-                    success := call(gas(), to, value, data, dataLength, 0, 0)
-                }
+                case 0 { success := call(gas(), to, value, data, dataLength, 0, 0) }
                 // This version does not allow delegatecalls
-                case 1 {
-                    revert(0, 0)
-                }
+                case 1 { revert(0, 0) }
                 if iszero(success) {
                     let ptr := mload(0x40)
                     returndatacopy(ptr, 0, returndatasize())
