@@ -15,7 +15,7 @@ import {Safe} from "lib/safe-smart-account/contracts/Safe.sol";
  *
  * This contract merges the "sigless" execution (no signature check) with the full Safe transaction execution logic.
  * It allows you to execute a SafeTx struct directly, skipping signature checks, but still performing all the other
- * steps (guard checks, gas accounting, payment, etc) as in the original Safe contract.
+ * steps (gas accounting, payment, etc) as in the original Safe contract.
  */
 contract SiglessTransactionExecutor is ISafeTx, Safe {
     using SafeMath for uint256;

@@ -12,14 +12,17 @@ interface ISafe {
 }
 
 /**
- * @title MultiChainSignaturesModule - An extension to the Safe contract that allows to execute transactions on multiple chains in one signature.
- * @dev The contract verifies signatures in a similar fashion to the Safe contract (in fact, most code was forked from the Safe contract),
- *      but it (TBF, against the EIP-712 specs) hardcodes the chain ID to 1 instead of using the real chain ID.
- *      This allows to use a single signature (or a set of signatures) to execute a transaction on multiple instances of the same multisig.
- *      Security considerations:
- *      - The module is limited to delegatecalling MultiSendWithChainFilter, which requires specifying the chain ID for each operation.
- *           Operations that have a different chain ID specified are skipped (not executed) on the specific instance.
- *           This way, we avoid the risk of replay attacks, while implementing as few code on top of Safe's stack as possible.
+ * @title MultiChainSignaturesModule
+ * @notice A Safe module that enables executing a batch of transactions on multiple chains using a single EIP-712 signature.
+ * @dev
+ * - This module allows Safe owners to sign a batch of transactions (with intended chain IDs) once, using a domain separator that always uses chainId = 1.
+ * - Anyone can submit the batch and signature to this module on any supported chain.
+ * - The module verifies the signature once, then iterates through the batch:
+ *     - If a transaction's chainId matches the current chain, it is executed via delegatecall into SiglessTransactionExecutor.
+ *     - Transactions for other chains are skipped.
+ * - This approach allows the same signature to be replayed across chains, but only the intended transactions (matching the current chainId) are executed.
+ * - Each transaction is still protected from replay on the same chain by the Safe's nonce mechanism.
+ * - Signature verification and transaction execution logic closely follow the Safe contract, but signature checks are only performed once per batch.
  * @custom:security-contact contact@ultrasoundlabs.org
  */
 contract MultiChainSignaturesModule is ISafeTx {
