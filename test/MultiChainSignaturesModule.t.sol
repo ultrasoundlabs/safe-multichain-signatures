@@ -54,7 +54,7 @@ contract MultiChainSignaturesModuleTest is Test, ISafeTx {
     function setUp() public {
         // 1. Create a wallet for the Safe owner
         owner = vm.addr(OWNER_PK);
-        
+
         // 2. Deploy the Safe via a proxy to mimic real-world usage.
         //    First deploy the singleton (implementation) and the proxy factory.
         Safe singleton = new Safe();
@@ -118,7 +118,6 @@ contract MultiChainSignaturesModuleTest is Test, ISafeTx {
         return abi.encodePacked(r, s, v);
     }
 
-
     /*//////////////////////////////////////////////////////////////
                                 TESTS
     //////////////////////////////////////////////////////////////*/
@@ -170,7 +169,7 @@ contract MultiChainSignaturesModuleTest is Test, ISafeTx {
 
         // Sign the batch with the owner's key.
         bytes memory signatures = _signBatch(batch);
-        
+
         // ACT: Execute the transaction batch via the module.
         // We expect two events: one from the ModuleManager and one from the SiglessTransactionExecutor.
         vm.recordLogs();
@@ -179,7 +178,7 @@ contract MultiChainSignaturesModuleTest is Test, ISafeTx {
 
         // ASSERT: Check that everything happened as expected.
         assertTrue(success, "execTransactionBatch should return true");
-        
+
         // Check that the target contract was called correctly.
         assertTrue(target.executed(), "Target contract should have been executed");
         assertEq(target.value(), 1 ether, "Target should have received 1 ether");
@@ -207,10 +206,21 @@ contract MultiChainSignaturesModuleTest is Test, ISafeTx {
         // ARRANGE: Create a batch and sign it with an unauthorized key.
         SafeTx[] memory txs = new SafeTx[](1);
         uint256[] memory chainIds = new uint256[](1);
-        txs[0] = SafeTx({ to: address(target), value: 0, data: "", operation: uint8(Enum.Operation.Call), safeTxGas: 0, baseGas: 0, gasPrice: 0, gasToken: address(0), refundReceiver: payable(address(0)), nonce: safe.nonce() });
+        txs[0] = SafeTx({
+            to: address(target),
+            value: 0,
+            data: "",
+            operation: uint8(Enum.Operation.Call),
+            safeTxGas: 0,
+            baseGas: 0,
+            gasPrice: 0,
+            gasToken: address(0),
+            refundReceiver: payable(address(0)),
+            nonce: safe.nonce()
+        });
         chainIds[0] = block.chainid;
         MultiChainSignaturesModule.SafeTxBatch memory batch = MultiChainSignaturesModule.SafeTxBatch(txs, chainIds);
-        
+
         // Sign with a random, non-owner private key.
         uint256 randomPk = 0xBAD516;
         bytes32 dataHash = keccak256(module.encodeTransactionBatchData(batch));
@@ -221,11 +231,11 @@ contract MultiChainSignaturesModuleTest is Test, ISafeTx {
         // function reverts with "GS026" for invalid signatures. The module's
         // call will bubble up this revert.
         vm.expectRevert("GS026");
-        
+
         // ACT: Attempt to execute with the bad signature.
         module.execTransactionBatch(address(safe), batch, badSignatures);
     }
-    
+
     /**
      * @notice Test the filtering logic: if a batch contains no transactions for
      *         the current chain, it should execute successfully but do nothing.
@@ -234,12 +244,23 @@ contract MultiChainSignaturesModuleTest is Test, ISafeTx {
         // ARRANGE: Create a batch where all txs are for other chains.
         SafeTx[] memory txs = new SafeTx[](1);
         uint256[] memory chainIds = new uint256[](1);
-        txs[0] = SafeTx({ to: address(target), value: 0, data: "", operation: uint8(Enum.Operation.Call), safeTxGas: 0, baseGas: 0, gasPrice: 0, gasToken: address(0), refundReceiver: payable(address(0)), nonce: safe.nonce() });
+        txs[0] = SafeTx({
+            to: address(target),
+            value: 0,
+            data: "",
+            operation: uint8(Enum.Operation.Call),
+            safeTxGas: 0,
+            baseGas: 0,
+            gasPrice: 0,
+            gasToken: address(0),
+            refundReceiver: payable(address(0)),
+            nonce: safe.nonce()
+        });
         chainIds[0] = 999; // Some other chain ID, not the current one.
         MultiChainSignaturesModule.SafeTxBatch memory batch = MultiChainSignaturesModule.SafeTxBatch(txs, chainIds);
 
         bytes memory signatures = _signBatch(batch);
-        
+
         // ACT: Execute the batch.
         // No transactions are for this chain, so no events are expected. We simply
         // don't set an expectEmit, and the test will proceed.
@@ -247,7 +268,7 @@ contract MultiChainSignaturesModuleTest is Test, ISafeTx {
 
         // ASSERT: The call should succeed, but no state should have changed.
         assertTrue(success, "execTransactionBatch should return true even if no txs are executed");
-        
+
         // Check that the target contract was NOT called.
         assertFalse(target.executed(), "Target should not have been executed");
         // Check that the Safe's nonce did NOT change.
@@ -453,4 +474,4 @@ contract MultiChainSignaturesModuleTest is Test, ISafeTx {
         assertFalse(secondSuccess, "Second execution should fail due to nonce reuse");
         assertEq(safe.nonce(), 1, "Nonce should remain 1");
     }
-} 
+}

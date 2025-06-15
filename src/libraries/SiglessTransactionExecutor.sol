@@ -98,13 +98,8 @@ contract SiglessTransactionExecutor is ISafeTx, Safe {
             uint256 gasUsed = gasleft();
             // If the gasPrice is 0 we assume that nearly all available gas can be used (it is always more than safeTxGas)
             // We only subtract 2500 (compared to the 3000 before) to ensure that the amount passed is still higher than safeTxGas
-            success = execute(
-                to,
-                value,
-                data,
-                Enum.Operation(operation),
-                gasPrice == 0 ? (gasleft() - 2500) : safeTxGas
-            );
+            success =
+                execute(to, value, data, Enum.Operation(operation), gasPrice == 0 ? (gasleft() - 2500) : safeTxGas);
             gasUsed = gasUsed - gasleft();
             // If no safeTxGas and no gasPrice was set (e.g. both are 0), then the internal tx is required to be successful
             // This makes it possible to use `estimateGas` without issues, as it searches for the minimum gas where the tx doesn't revert
@@ -125,6 +120,7 @@ contract SiglessTransactionExecutor is ISafeTx, Safe {
             }
             // For demonstration, we emit events as in the original Safe contract.
             if (success) emit ExecutionSuccess(bytes32(0), payment); // No txHash, as we skip signature logic
+
             else emit ExecutionFailure(bytes32(0), payment);
         }
 

@@ -18,12 +18,11 @@ interface ISafe {
  *      This allows to use a single signature (or a set of signatures) to execute a transaction on multiple instances of the same multisig.
  *      Security considerations:
  *      - The module is limited to delegatecalling MultiSendWithChainFilter, which requires specifying the chain ID for each operation.
-          Operations that have a different chain ID specified are skipped (not executed) on the specific instance.
-          This way, we avoid the risk of replay attacks, while implementing as few code on top of Safe's stack as possible.
+ *           Operations that have a different chain ID specified are skipped (not executed) on the specific instance.
+ *           This way, we avoid the risk of replay attacks, while implementing as few code on top of Safe's stack as possible.
  * @custom:security-contact contact@ultrasoundlabs.org
  */
 contract MultiChainSignaturesModule is ISafeTx {
-
     struct SafeTxBatch {
         SafeTx[] safeTxs;
         uint256[] chainIds;
@@ -35,7 +34,8 @@ contract MultiChainSignaturesModule is ISafeTx {
     // keccak256(
     //     "EIP712Domain(uint256 chainId,address verifyingContract)"
     // );
-    bytes32 private constant DOMAIN_SEPARATOR_TYPEHASH = 0x47e79534a245952e8b16893a336b85a3d9ea9fa8c573f3d803afb92a79469218;
+    bytes32 private constant DOMAIN_SEPARATOR_TYPEHASH =
+        0x47e79534a245952e8b16893a336b85a3d9ea9fa8c573f3d803afb92a79469218;
 
     // keccak256(
     //     "SafeTxBatch(SafeTx[] safeTxs,uint256[] chainIds)SafeTx(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,uint256 nonce)"
@@ -56,7 +56,7 @@ contract MultiChainSignaturesModule is ISafeTx {
     }
 
     function domainSeparator() public view returns (bytes32) {
-        return keccak256(abi.encode(DOMAIN_SEPARATOR_TYPEHASH, 1 /* Ethereum L1's chainId */, this));
+        return keccak256(abi.encode(DOMAIN_SEPARATOR_TYPEHASH, 1, /* Ethereum L1's chainId */ this));
     }
 
     /**
@@ -67,9 +67,7 @@ contract MultiChainSignaturesModule is ISafeTx {
      * @return The EIP-712 preimage for the batch transaction.
      * @dev Forked from Safe.encodeTransactionData.
      */
-    function encodeTransactionBatchData(
-        SafeTxBatch calldata safeTxBatch
-    ) public view returns (bytes memory) {
+    function encodeTransactionBatchData(SafeTxBatch calldata safeTxBatch) public view returns (bytes memory) {
         // First, encode each SafeTx in the batch using the same struct hashing as Safe.
         bytes32[] memory safeTxHashes = new bytes32[](safeTxBatch.safeTxs.length);
         for (uint256 i = 0; i < safeTxBatch.safeTxs.length; i++) {
@@ -98,40 +96,31 @@ contract MultiChainSignaturesModule is ISafeTx {
         bytes32 chainIdsHash = keccak256(abi.encodePacked(safeTxBatch.chainIds));
 
         // Now, hash the batch struct
-        bytes32 batchHash = keccak256(
-            abi.encode(
-                SAFE_TX_BATCH_TYPEHASH,
-                safeTxsHash,
-                chainIdsHash
-            )
-        );
+        bytes32 batchHash = keccak256(abi.encode(SAFE_TX_BATCH_TYPEHASH, safeTxsHash, chainIdsHash));
 
         // Return the EIP-712 preimage for the batch
         return abi.encodePacked(bytes1(0x19), bytes1(0x01), domainSeparator(), batchHash);
     }
 
-    function execTransactionBatch(
-        address account,
-        SafeTxBatch calldata safeTxBatch,
-        bytes calldata signatures
-    ) public returns (bool) {
+    function execTransactionBatch(address account, SafeTxBatch calldata safeTxBatch, bytes calldata signatures)
+        public
+        returns (bool)
+    {
         bytes memory encodedData = encodeTransactionBatchData(safeTxBatch);
-        ISafe(account).checkSignatures(
-            keccak256(encodedData),
-            encodedData,
-            signatures
-        ); // reverts if the signatures are invalid
+        ISafe(account).checkSignatures(keccak256(encodedData), encodedData, signatures); // reverts if the signatures are invalid
 
         bool hadFailures = false;
         for (uint256 i = 0; i < safeTxBatch.safeTxs.length; i++) {
             if (safeTxBatch.chainIds[i] != block.chainid) continue;
 
-            if (!ModuleManager(account).execTransactionFromModule(
-                SIGLESS_TRANSACTION_EXECUTOR,
-                0,
-                abi.encodeWithSelector(SiglessTransactionExecutor.execTransaction.selector, safeTxBatch.safeTxs[i]),
-                Enum.Operation.DelegateCall
-            )) hadFailures = true;
+            if (
+                !ModuleManager(account).execTransactionFromModule(
+                    SIGLESS_TRANSACTION_EXECUTOR,
+                    0,
+                    abi.encodeWithSelector(SiglessTransactionExecutor.execTransaction.selector, safeTxBatch.safeTxs[i]),
+                    Enum.Operation.DelegateCall
+                )
+            ) hadFailures = true;
         }
 
         return !hadFailures;
