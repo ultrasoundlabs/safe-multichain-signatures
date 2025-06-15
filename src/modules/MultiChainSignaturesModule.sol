@@ -30,7 +30,7 @@ contract MultiChainSignaturesModule is ISafeTx {
     }
 
     // The version of the contract
-    string public constant VERSION = "1.5.0-MCSM";
+    string public constant VERSION = "1.4.1-MCSM"; // forked from Safe 1.4.1
 
     // keccak256(
     //     "EIP712Domain(uint256 chainId,address verifyingContract)"
@@ -122,7 +122,7 @@ contract MultiChainSignaturesModule is ISafeTx {
             signatures
         ); // reverts if the signatures are invalid
 
-        uint256 failedTxs = 0;
+        bool hadFailures = false;
         for (uint256 i = 0; i < safeTxBatch.safeTxs.length; i++) {
             if (safeTxBatch.chainIds[i] != block.chainid) continue;
 
@@ -131,9 +131,9 @@ contract MultiChainSignaturesModule is ISafeTx {
                 0,
                 abi.encodeWithSelector(SiglessTransactionExecutor.execTransaction.selector, safeTxBatch.safeTxs[i]),
                 Enum.Operation.DelegateCall
-            )) failedTxs++;
+            )) hadFailures = true;
         }
 
-        return failedTxs == 0;
+        return !hadFailures;
     }
 }
