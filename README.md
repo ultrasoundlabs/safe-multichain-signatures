@@ -10,8 +10,8 @@ forge script script/MultiChainSignaturesModule.s.sol:MultiChainSignaturesModuleS
 ```
 
 The scripts use [CREATEX](https://github.com/pcaversaccio/createx) (specifically [radeksvarz's createx-forge library](https://github.com/radeksvarz/createx-forge)) to deploy the contracts on any chain deterministically. Deploying v0.1 release of these contracts, you should get the following addresses:
-- SiglessTransactionExecutor: `0xC1c52128f421986fC6B550CD1475f1f2953c9130`
-- MultiChainSignaturesModule: `0x29ab5f48485C2030981Ecd3d87584ae4753dD935`
+- SiglessTransactionExecutor: `0xec15fce23da6780baac2700b32ac41cf3cf19246`
+- MultiChainSignaturesModule: `0x2495E986407c9de582fFFC4940E2BD79ca08e6Da`
 
 ## How it works
 
@@ -35,6 +35,7 @@ sequenceDiagram
     participant Relayer as Relayer / EOA
     participant Module as MultiChainSignaturesModule
     participant Safe as Gnosis Safe
+    participant Guard as Guard (optional)
     participant Exec as SiglessTransactionExecutor (delegate-call)
 
     Owner->>Owner: Sign EIP-712 batch (chainId = 1)
@@ -46,7 +47,10 @@ sequenceDiagram
         activate Safe
         Safe->>Exec: delegatecall execTransaction(tx)
         activate Exec
+        Exec->>Guard: checkTransaction(...)
+        Guard-->>Exec: ok / revert
         Exec->>Safe: perform tx logic (nonce++, gas refund, call `to`, ...)
+        Exec->>Guard: checkAfterExecution(...)
         deactivate Exec
         Safe-->>Module: success / failure
         deactivate Safe
