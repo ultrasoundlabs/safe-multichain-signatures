@@ -112,7 +112,7 @@ contract MultiChainSignaturesModuleTest is Test, ISafeTx {
      * @param batch The batch of transactions to sign.
      * @return signatures A packed byte array of the r, s, and v values of the signature.
      */
-    function _signBatch(MultiChainSignaturesModule.SafeTxBatch memory batch) internal returns (bytes memory) {
+    function _signBatch(MultiChainSignaturesModule.SafeTxBatch memory batch) internal view returns (bytes memory) {
         bytes32 dataHash = keccak256(module.encodeTransactionBatchData(batch));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(OWNER_PK, dataHash);
         return abi.encodePacked(r, s, v);

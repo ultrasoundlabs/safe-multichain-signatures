@@ -9,9 +9,9 @@ forge script script/SiglessTransactionExecutor.s.sol:SiglessTransactionExecutorS
 forge script script/MultiChainSignaturesModule.s.sol:MultiChainSignaturesModuleScript --rpc-url $RPC_URL --broadcast --verify -vvvv
 ```
 
-The scripts use [CREATEX](https://github.com/pcaversaccio/createx) (specifically [radeksvarz's createx-forge library](https://github.com/radeksvarz/createx-forge)) to deploy the contracts on any chain deterministically. Deploying v0.0 release of these contracts, you should get the following addresses:
-- SiglessTransactionExecutor: `0xFE8E3275aDeb5bB326ded58d1336aDb2b7A68f4b`
-- MultiChainSignaturesModule: `0xc254C43E27FB03791663C109A4DFD0EB99242Ee9`
+The scripts use [CREATEX](https://github.com/pcaversaccio/createx) (specifically [radeksvarz's createx-forge library](https://github.com/radeksvarz/createx-forge)) to deploy the contracts on any chain deterministically. Deploying v0.1 release of these contracts, you should get the following addresses:
+- SiglessTransactionExecutor: `0xC1c52128f421986fC6B550CD1475f1f2953c9130`
+- MultiChainSignaturesModule: `0x29ab5f48485C2030981Ecd3d87584ae4753dD935`
 
 ## How it works
 
@@ -61,7 +61,7 @@ EIP-712 intends the `chainId` in the domain separator to stop replay across chai
 ### Gas & security notes
 * **Single sig-check → many executions** – signature recovery costs ~3 k gas per signer; we pay it once instead of _n_ times.
 * `SiglessTransactionExecutor` still checks and increments the Safe `nonce`, so each `SafeTx` is non-replayable per chain.
-* Guard logic is currently **disabled**.
+* Safe's internal guard logic is still **enabled**, so a bricked Safe would be bricked through sigless execution too.
 
 ## Installation
 

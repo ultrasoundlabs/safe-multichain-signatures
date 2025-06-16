@@ -3,6 +3,7 @@ pragma solidity >=0.7.0 <0.9.0;
 
 import {ISafeTx} from "../common/ISafeTx.sol";
 import {SafeMath} from "lib/safe-smart-account/contracts/external/SafeMath.sol";
+import {Guard} from "lib/safe-smart-account/contracts/base/GuardManager.sol";
 import {Enum} from "lib/safe-smart-account/contracts/common/Enum.sol";
 import {Safe} from "lib/safe-smart-account/contracts/Safe.sol";
 
@@ -59,26 +60,24 @@ contract SiglessTransactionExecutor is ISafeTx, Safe {
         address payable refundReceiver = payable(safeTx.refundReceiver);
         uint256 _nonce = safeTx.nonce;
 
-        // Sigless execution can break the guard logic, so we don't call guards here.
-        //
-        // // Before execution, call the guard hook if present.
-        // address guard = getGuard();
-        // if (guard != address(0)) {
-        //     ITransactionGuard(guard).checkTransaction(
-        //         to,
-        //         value,
-        //         data,
-        //         Enum.Operation(operation),
-        //         safeTxGas,
-        //         baseGas,
-        //         gasPrice,
-        //         gasToken,
-        //         refundReceiver,
-        //         // No signatures, so pass empty bytes
-        //         "",
-        //         msg.sender
-        //     );
-        // }
+        // Before execution, call the guard hook if present.
+        address guard = getGuard();
+        if (guard != address(0)) {
+            Guard(guard).checkTransaction(
+                to,
+                value,
+                data,
+                Enum.Operation(operation),
+                safeTxGas,
+                baseGas,
+                gasPrice,
+                gasToken,
+                refundReceiver,
+                // No signatures, so pass empty bytes
+                "",
+                msg.sender
+            );
+        }
 
         // The signature was already verified in the multi-chain signature module, so we don't need to do it here.
         // However, that module did not verify the nonce, so we need to do it here.
@@ -124,10 +123,10 @@ contract SiglessTransactionExecutor is ISafeTx, Safe {
             else emit ExecutionFailure(bytes32(0), payment);
         }
 
-        // // After execution, call the guard hook if present.
-        // if (guard != address(0)) {
-        //     ITransactionGuard(guard).checkAfterExecution(bytes32(0), success);
-        // }
+        // After execution, call the guard hook if present.
+        if (guard != address(0)) {
+            Guard(guard).checkAfterExecution(bytes32(0), success);
+        }
     }
 
     /**
