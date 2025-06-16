@@ -2,12 +2,11 @@
 pragma solidity >=0.7.0 <0.9.0;
 
 import {ISafeTx} from "../common/ISafeTx.sol";
+import {SecuredTokenTransfer} from "lib/safe-smart-account/contracts/common/SecuredTokenTransfer.sol";
+import {Executor} from "lib/safe-smart-account/contracts/base/Executor.sol";
 import {SafeMath} from "lib/safe-smart-account/contracts/external/SafeMath.sol";
-import {Guard} from "lib/safe-smart-account/contracts/base/GuardManager.sol";
+import {Guard, GuardManager} from "lib/safe-smart-account/contracts/base/GuardManager.sol";
 import {Enum} from "lib/safe-smart-account/contracts/common/Enum.sol";
-import {Safe} from "lib/safe-smart-account/contracts/Safe.sol";
-
-// import {ITransactionGuard, GuardManager} from "lib/safe-smart-account/contracts/base/GuardManager.sol";
 
 /**
  * @title Sigless Transaction Executor - Allows to execute transactions without a signature
@@ -17,9 +16,27 @@ import {Safe} from "lib/safe-smart-account/contracts/Safe.sol";
  * This contract merges the "sigless" execution (no signature check) with the full Safe transaction execution logic.
  * It allows you to execute a SafeTx struct directly, skipping signature checks, but still performing all the other
  * steps (gas accounting, payment, etc) as in the original Safe contract.
+ * We don't import the Safe contract to save on gas costs.
  */
-contract SiglessTransactionExecutor is ISafeTx, Safe {
+contract SiglessTransactionExecutor is ISafeTx, SecuredTokenTransfer, Executor, GuardManager {
     using SafeMath for uint256;
+
+    // keccak256(
+    //     "EIP712Domain(uint256 chainId,address verifyingContract)"
+    // );
+    bytes32 private constant DOMAIN_SEPARATOR_TYPEHASH =
+        0x47e79534a245952e8b16893a336b85a3d9ea9fa8c573f3d803afb92a79469218;
+
+    // keccak256(
+    //     "SafeTx(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,uint256 nonce)"
+    // );
+    bytes32 private constant SAFE_TX_TYPEHASH = 0xbb8310d486368db6bd6f849402fdd73ad53d316b5a4b2644ad6efe0f941286d8;
+
+    event ExecutionFailure(bytes32 indexed txHash, uint256 payment);
+    event ExecutionSuccess(bytes32 indexed txHash, uint256 payment);
+
+    uint256[5] private __gap; // nonce is at 0x05 so we skip some
+    uint256 public nonce;
 
     /**
      * @notice Function which uses assembly to revert with the passed error message.
@@ -85,6 +102,22 @@ contract SiglessTransactionExecutor is ISafeTx, Safe {
         // We increment the nonce in a similar way to how the Safe contract constructs data to verify the signature against.
         if (_nonce != nonce++) revertWithError("GS024");
 
+        // Calculate the txHash as in Safe, for event emission and off-chain compatibility.
+        bytes32 txHash = keccak256(
+            encodeTransactionData(
+                to,
+                value,
+                data,
+                Enum.Operation(operation),
+                safeTxGas,
+                baseGas,
+                gasPrice,
+                gasToken,
+                refundReceiver,
+                _nonce
+            )
+        );
+
         // We require some gas to emit the events (at least 2500) after the execution and some to perform code until the execution (500)
         // We also include the 1/64 in the check that is not sent along with a call to counteract potential shortings because of EIP-150
         // We use `<< 6` instead of `* 64` as SHR / SHL opcode only uses 3 gas, while DIV / MUL opcode uses 5 gas.
@@ -117,15 +150,14 @@ contract SiglessTransactionExecutor is ISafeTx, Safe {
             if (gasPrice > 0) {
                 payment = _handlePayment(gasUsed, baseGas, gasPrice, gasToken, refundReceiver);
             }
-            // For demonstration, we emit events as in the original Safe contract.
-            if (success) emit ExecutionSuccess(bytes32(0), payment); // No txHash, as we skip signature logic
-
-            else emit ExecutionFailure(bytes32(0), payment);
+            // Emit events with the correct txHash, as in Safe.
+            if (success) emit ExecutionSuccess(txHash, payment);
+            else emit ExecutionFailure(txHash, payment);
         }
 
         // After execution, call the guard hook if present.
         if (guard != address(0)) {
-            Guard(guard).checkAfterExecution(bytes32(0), success);
+            Guard(guard).checkAfterExecution(txHash, success);
         }
     }
 
@@ -136,7 +168,7 @@ contract SiglessTransactionExecutor is ISafeTx, Safe {
      * @param gasPrice Gas price that should be used for the payment calculation.
      * @param gasToken Token address (or 0 if ETH) that is used for the payment.
      * @return payment The amount of payment made in the specified token.
-     * @dev Forked from Safe.sol because there this function is private for some reason.
+     * @dev Forked from Safe.sol
      */
     function _handlePayment(
         uint256 gasUsed,
@@ -155,5 +187,73 @@ contract SiglessTransactionExecutor is ISafeTx, Safe {
             payment = gasUsed.add(baseGas).mul(gasPrice);
             if (!transferToken(gasToken, receiver, payment)) revertWithError("GS012");
         }
+    }
+
+    /**
+     * @notice Returns the pre-image of the transaction hash (see getTransactionHash).
+     * @param to Destination address.
+     * @param value Ether value.
+     * @param data Data payload.
+     * @param operation Operation type.
+     * @param safeTxGas Gas that should be used for the safe transaction.
+     * @param baseGas Gas costs for that are independent of the transaction execution(e.g. base transaction fee, signature check, payment of the refund)
+     * @param gasPrice Maximum gas price that should be used for this transaction.
+     * @param gasToken Token address (or 0 if ETH) that is used for the payment.
+     * @param refundReceiver Address of receiver of gas payment (or 0 if tx.origin).
+     * @param _nonce Transaction nonce.
+     * @return Transaction hash bytes.
+     * @dev Forked from Safe.sol
+     */
+    function encodeTransactionData(
+        address to,
+        uint256 value,
+        bytes memory data,
+        Enum.Operation operation,
+        uint256 safeTxGas,
+        uint256 baseGas,
+        uint256 gasPrice,
+        address gasToken,
+        address refundReceiver,
+        uint256 _nonce
+    ) internal view returns (bytes memory) {
+        bytes32 safeTxHash = keccak256(
+            abi.encode(
+                SAFE_TX_TYPEHASH,
+                to,
+                value,
+                keccak256(data),
+                operation,
+                safeTxGas,
+                baseGas,
+                gasPrice,
+                gasToken,
+                refundReceiver,
+                _nonce
+            )
+        );
+        return abi.encodePacked(bytes1(0x19), bytes1(0x01), domainSeparator(), safeTxHash);
+    }
+
+    /**
+     * @dev Returns the domain separator for this contract, as defined in the EIP-712 standard.
+     * @return bytes32 The domain separator hash.
+     * @dev Forked from Safe.sol
+     */
+    function domainSeparator() internal view returns (bytes32) {
+        return keccak256(abi.encode(DOMAIN_SEPARATOR_TYPEHASH, getChainId(), this));
+    }
+
+    /**
+     * @notice Returns the ID of the chain the contract is currently deployed on.
+     * @return The ID of the current chain as a uint256.
+     * @dev Forked from Safe.sol
+     */
+    function getChainId() public view returns (uint256) {
+        uint256 id;
+        // solhint-disable-next-line no-inline-assembly
+        assembly {
+            id := chainid()
+        }
+        return id;
     }
 }
